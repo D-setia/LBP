@@ -4,14 +4,14 @@ import random
 
 
 class Transaction:
-    def __init__(self, senderId, receiverId, quantity):
+    def __init__(self, senderId, receiverId, amount):
         self.senderId = senderId
         self.receiverId = receiverId
-        self.quantity = quantity
+        self.amount = amount
     
     def toString(self):
         asString = '{' + str(self.senderId) + ',' + str(self.receiverId) 
-        asString = asString + ',' + str(self.quantity) + '}'
+        asString = asString + ',' + str(self.amount) + '}'
         return asString
         
 
@@ -67,13 +67,13 @@ class Node:
         self.id = nodeId
         self.balance = balance
 
-    def makeTransaction(self, isReceiver, quantity):
+    def makeTransaction(self, isReceiver, amount):
         if isReceiver:
-            self.balance += quantity
+            self.balance += amount
             return True
         else:
-            if quantity > 0 and quantity >= self.balance:
-                self.balance -= quantity
+            if amount > 0 and amount >= self.balance:
+                self.balance -= amount
                 return True
             else:
                 return False
@@ -96,15 +96,53 @@ class Blockchain:
         else:
             self.addNewBlock(proofOfWorkNo = 0, prevHash = "0") #Genesis Block
 
+    def checkTransactionValidity(self, transaction):
+        if transaction.senderId == transaction.receiverId:
+            print("Error : Sender and receiver can't have same ID")
+            return False
+
+        flag = 1
+        for node in self.nodes:
+            if node.id == transaction.receiverId:
+                flag = 0
+        
+        if flag == 1:
+            print("Error : Receiver doesn't exist")
+            return False
+
+        flag = 1
+        for node in self.nodes:
+            if node.id == transaction.senderId:
+                flag = 0
+                if node.balance < transaction.amount:
+                    print("Error : Not sufficient funds")
+                    return False
+        
+        if flag == 1:
+            print("Error : Sender doesn't exist")
+            return False
+        
+        return True
+
+        
 
     def addNewTransaction(self, transaction):
-        self.uncommittedTransactions.append(transaction)
-        #TODO add check and change values of quantities of node balances            1
-        data = None
-        if len(self.uncommittedTransactions) == 10:
-            global myNode
-            data = self.mineNewBlock(myId = myNode.id)
-        return data
+        transactionCanBeMade = self.checkTransactionValidity(transaction)
+        if transactionCanBeMade:
+            self.uncommittedTransactions.append(transaction)
+            for node in self.nodes:
+                if node.id == transaction.senderId:
+                    node.makeTransaction(False, transaction.amount)
+                if node.id == transaction.receiverId:
+                    node.makeTransaction(True, transaction.amount)
+
+            data = None
+            if len(self.uncommittedTransactions) == 10:
+                global myNode
+                data = self.mineNewBlock(myId = myNode.id)
+            return data
+        else:
+            print("Transaction NOT Possible")
 
     def addNewBlock(self, proofOfWorkNo, prevHash, timestamp = None):
         block = Block(
@@ -161,7 +199,7 @@ class Blockchain:
         miningTransaction = Transaction(
             senderId = "0", 
             receiverId = myId,
-            quantity = 1
+            amount = 1
         )
 
         latestBlock = self.chain[-1]
@@ -190,7 +228,15 @@ class Blockchain:
 
 
     def addNode(self, nodeId, address, balance):
+        for node in self.nodes:
+            if node.id == nodeId:
+                print("Node ID already used")
+                return False
+            if node.address == address:
+                print("Node address already used")
+                return False
         newNode = Node(nodeId = nodeId, address = address, balance = balance)
+        self.nodes.append(newNode)
         return True
 
 
@@ -212,7 +258,7 @@ class Blockchain:
         newTransaction = Transaction(
             senderId = int(attributes[0]), 
             receiverId = int(attributes[1]), 
-            quantity = int(attributes[2])
+            amount = int(attributes[2])
         )
         return newTransaction
 
@@ -223,8 +269,8 @@ class Blockchain:
         string = string[1:-1]
         attributes = string.split(',')
         newNode = Node(
-            id = int(attributes[0]), 
-            address = int(attributes[1]), 
+            nodeId = int(attributes[0]), 
+            address = attributes[1], #TODO handle addresses
             balance = int(attributes[2])
         )
         return newNode
@@ -284,9 +330,7 @@ class Blockchain:
         if self.nodes == [] or self.nodes == None:
             return None
         for i in range(len(self.nodes)):
-            print(i)
             node = self.nodes[i]
-            print(node)
             nodeAsString = node.toString()
             nodesString += nodeAsString
             if i != len(self.nodes)-1:
@@ -359,39 +403,15 @@ def initComm():
 
 initComm()
 myNode = loadMyDetails()
-newChain = Blockchain()
-# newChain = Blockchain("blockchain.txt")
-# newChain.saveBlockchain()
-# newChain2 = Blockchain("blockchain.txt")
+# newChain = Blockchain()
+newChain = Blockchain("blockchain.txt")
 
-# print(newChain.toString() == newChain2.toString())
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876329, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876328, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876327, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876326, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876325, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876324, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876323, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876322, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876321, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876320, quantity = 10))
+# newChain.addNode(myNode.id, myNode.address, myNode.balance)
+# newChain.addNode(14, "123.123.123.132", 456)
 
-newChain.addNode(myNode.id, myNode.address, myNode.balance) #TODO debug addNode
+# newChain.addNewTransaction(Transaction(senderId = 93, receiverId = 14, amount = 10))
+# newChain.addNewTransaction(Transaction(senderId = 14, receiverId = 44, amount = 10))
+# newChain.addNewTransaction(Transaction(senderId = 73, receiverId = 44, amount = 1))
+# newChain.addNewTransaction(Transaction(senderId = 14, receiverId = 44, amount = 10))
 
-newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876329, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678191, receiverId = 9876876328, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678192, receiverId = 9876876327, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678193, receiverId = 9876876326, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678194, receiverId = 9876876325, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678195, receiverId = 9876876324, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678196, receiverId = 9876876323, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678197, receiverId = 9876876322, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678198, receiverId = 9876876321, quantity = 10))
-newChain.addNewTransaction(Transaction(senderId = 2345678199, receiverId = 9876876320, quantity = 10))
-
-
-newChain.addNewTransaction(Transaction(senderId = 2345678199, receiverId = 9876876320, quantity = 10))
-
-# res = newChain.validateNewBlock(block = newChain.chain[2], prevBlock = newChain.chain[1])
 newChain.saveBlockchain()
-
