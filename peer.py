@@ -1,5 +1,6 @@
 import hashlib
 import time
+import random
 
 
 class Transaction:
@@ -103,7 +104,6 @@ class Blockchain:
         if len(self.uncommittedTransactions) == 10:
             global myNode
             data = self.mineNewBlock(myId = myNode.id)
-            #TODO take ip if we want to mine block or not                           1
         return data
 
     def addNewBlock(self, proofOfWorkNo, prevHash, timestamp = None):
@@ -330,6 +330,34 @@ def saveMyDetials(myNode):
     nodeDetailsFile.close()
 
 
+def encrypt(pt, e, N):
+    return pow(pt, e, N)
+
+def decrypt(ct, d, N):
+    return pow(ct, d, N)
+
+
+def initComm():
+    authKeyFile = open("authKey.txt", 'r')
+    contents = authKeyFile.read()
+    contents = contents.split(";;")
+    e = int(contents[0])
+    d = int(contents[1])
+    N = int(contents[2])
+
+    randNum = random.randint(1000000000, 9999999999)
+    ct = encrypt(randNum, e, N)
+    pt = decrypt(ct, d, N) 
+    #TODO send randNum, receive decypted and one diff encrypted random no, send decrypted 
+    # if ptRec == randNum:
+    #   ctRec = receiveNo()
+    #   pt = decrypt(ctRec)
+    #   send(pt)
+    #   confirmation = receive()
+    #   makeTransaction()
+
+
+initComm()
 myNode = loadMyDetails()
 newChain = Blockchain()
 # newChain = Blockchain("blockchain.txt")
@@ -348,7 +376,7 @@ newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 98768
 newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876321, quantity = 10))
 newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876320, quantity = 10))
 
-newChain.addNode(myNode.id, myNode.address, myNode.balance)
+newChain.addNode(myNode.id, myNode.address, myNode.balance) #TODO debug addNode
 
 newChain.addNewTransaction(Transaction(senderId = 2345678190, receiverId = 9876876329, quantity = 10))
 newChain.addNewTransaction(Transaction(senderId = 2345678191, receiverId = 9876876328, quantity = 10))
