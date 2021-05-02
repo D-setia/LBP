@@ -3,8 +3,8 @@ import time
 import random
 import socket
 
-HOST = '127.0.0.1' 
-PORT = 65432     
+HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
+PORT = 65432        # Port to listen on (non-privileged ports are > 1023)
 
 class Transaction:
     def __init__(self, senderId, receiverId, amount):
@@ -357,7 +357,7 @@ class Blockchain:
 
 
 def loadMyDetails():
-    nodeDetialsFile = open("my-details.txt", 'r')
+    nodeDetialsFile = open("my-details2.txt", 'r')
     myNodeDetails = nodeDetialsFile.read()
     
     details = myNodeDetails.split(';')
@@ -384,7 +384,7 @@ def decrypt(ct, d, N):
     return pow(ct, d, N)
 
 
-def initComm(send, amount):
+def listen():
     global myNode
     global newChain
     authKeyFile = open("authKey.txt", 'r')
@@ -394,47 +394,80 @@ def initComm(send, amount):
     d = int(contents[1])
     N = int(contents[2])
 
-    randNum = random.randint(1000000000, 9999999999)
-    ct = encrypt(randNum, e, N)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((HOST, PORT))
-        s.sendall(ct.to_bytes(2048, "big"))
-        data = s.recv(2048)
-        data = int.from_bytes(data, "big")
-        
-        if data == randNum:
-            print("User Authenticated\n")
-            ct = s.recv(2048)
+        s.bind((HOST, PORT))
+        s.listen()
+        conn, addr = s.accept()
+        with conn:
+            print('Connected by', addr, end="\n\n")
+            ct = conn.recv(2048)
             ct = int.from_bytes(ct, "big")
-            pt = decrypt(ct, d, N)
-            s.sendall(pt.to_bytes(2048, "big"))
-
-            if send:
-                print("Sending\n")
-                s.sendall(b'send')
-                s.sendall(myNode.id.to_bytes(1024, "big"))
-                s.sendall(amount.to_bytes(1024, "big"))
-            else:
-                print("Requesting\n")
-                s.sendall(b'request')
-                s.sendall(myNode.id.to_bytes(1024, "big"))
-                s.sendall(amount.to_bytes(1024, "big"))
+            pt = decrypt(ct, d, N) 
+            conn.sendall(pt.to_bytes(2048, "big"))
             
-            status = s.recv(1024)
-            if status == b'Accept':
-                otherPeerId = int.from_bytes(s.recv(1024), "big")
-                transaction = Transaction(myNode.id, otherPeerId, amount) if send else  Transaction(otherPeerId, myNode.id, amount)
-                newChain.addNewTransaction(transaction)
-                print("Transaction Made")
+            randNum = random.randint(1000000000, 9999999999)
+            ct = encrypt(randNum, e, N)
+            conn.sendall(ct.to_bytes(2048, "big"))
+
+            pt = conn.recv(2048)
+            if pt == b'End connection':
+                print("Connection Terminated...")
+                return
             else:
-                print("Error")
-        else:
-            ct = s.recv(2048)
-            s.sendall(b'End connection')
-            return
-        # print('Received', repr(data))
-    print("Connection Terminated...")
+                pt = int.from_bytes(pt, "big")
+                if pt == randNum:
+                    print("User Authenticated\n")
+
+                    typeOfReq = conn.recv(1024)
+                    print("Request Type: ", typeOfReq.decode("utf-8"))
+                    otherPeerId = int.from_bytes(conn.recv(1024), "big")
+                    print("ID received: ", otherPeerId)
+                    amount = int.from_bytes(conn.recv(1024), "big")
+                    print("Amount: ", amount, end="\n\n")
+
+                    otherPeerNode = None
+
+                    for node in newChain.nodes:
+                        if node.id == otherPeerId:
+                            otherPeerNode = node
+
+
+                    if otherPeerNode != None:
+                        if typeOfReq == b'send':
+                            if otherPeerNode.balance >= amount:
+                                print("Accepted\n")
+                                conn.sendall(b'Accept')
+                                conn.sendall(myNode.id.to_bytes(1024, "big"))
+                                transaction = Transaction(otherPeerId, myNode.id, amount)
+                                newChain.addNewTransaction(transaction)
+                                print("Transaction Made")
+                                
+                            else:
+                                conn.sendall(b'Reject')
+                                print("Rejected\n")
+
+                        elif typeOfReq == b'request':
+                            if myNode.balance >= amount:
+                                print("Accepted\n")
+                                conn.sendall(b'Accept')
+                                conn.sendall(myNode.id.to_bytes(1024, "big"))
+                                transaction = Transaction(myNode.id, otherPeerId, amount)
+                                newChain.addNewTransaction(transaction)
+                                print("Transaction Made")
+                            else:
+                                conn.sendall(b'Reject')
+                                print("Rejected\n")
+                    else:
+                        print("Not matching node found")
+                    
+                else:
+                    print("Unauthorized User")
+                    print("...Disconnecting...")
+
+        print("Connection Terminated...")
+
+    
     #TODO send randNum, receive decypted and one diff encrypted random no, send decrypted 
     # if ptRec == randNum:
     #   ctRec = receiveNo()
@@ -449,7 +482,7 @@ myNode = loadMyDetails()
 # newChain = Blockchain()
 newChain = Blockchain("blockchain.txt")
 
-initComm(True, 10)
+listen()
 
 # newChain.addNode(myNode.id, myNode.address, myNode.balance)
 # newChain.addNode(14, "123.123.123.132", 456)
